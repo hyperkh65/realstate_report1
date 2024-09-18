@@ -207,7 +207,7 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         st.write("No data to save.")
 
 # Streamlit 앱 실행
-st.title("지역별 아파트 호가 정보 수집기 - 투데이즈 by KH")
+st.title("아파트 호가 분석 :2days.kr by KH")
 
 # 사용자 입력 받기
 city_name = st.text_input("시/도 이름 입력", "서울특별시")
