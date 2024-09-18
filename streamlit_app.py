@@ -3,19 +3,18 @@ import requests
 import json
 import pandas as pd
 from bs4 import BeautifulSoup
-
-# JSON 파일 업로드를 통해 법정동 코드 로드
-def load_dong_codes(json_file):
-    try:
-        data = json.load(json_file)
-        return data
-    except Exception as e:
-        st.error(f"Error loading JSON: {e}")
-        return None
+from io import BytesIO
 
 # 법정동 코드를 가져오는 함수
-def get_dong_codes_for_city(city_name, sigungu_name=None, json_data=None):
-    for si_do in json_data:
+def get_dong_codes_for_city(city_name, sigungu_name=None, json_path='district.json'):
+    try:
+        with open(json_path, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+    except FileNotFoundError:
+        st.error(f"Error: The file at {json_path} was not found.")
+        return None, None
+
+    for si_do in data:
         if si_do['si_do_name'] == city_name:
             if sigungu_name and sigungu_name != '전체':
                 for sigungu in si_do['sigungu']:
@@ -61,7 +60,7 @@ def get_apt_list(dong_code):
 
             return df[required_columns]
         else:
-            st.error(f"No data found for {dong_code}.")
+            st.warning(f"No data found for {dong_code}.")
             return pd.DataFrame(columns=required_columns)
 
     except Exception as e:
@@ -101,28 +100,42 @@ def get_apt_details(apt_code):
         for item in detail_items:
             term = item.find('div', class_='DataList_term__Tks7l').text.strip()
             definition = item.find('div', class_='DataList_definition__d9KY1').text.strip()
-            if term in ['공급면적', '전용면적', '해당면적 세대수', '방/욕실']:
+            if term in ['공급면적', '전용면적', '방/욕실', '위치', '세대수', '난방', '주차']:
                 detail_dict[term] = definition
-        
+
         # 매물 정보 가져오기
         r_article = requests.get(article_url, headers=header)
         r_article.encoding = "utf-8-sig"
         soup_article = BeautifulSoup(r_article.content, 'html.parser')
         
+        # 매물 리스트
         listings = []
         for item in soup_article.find_all('li', class_='ComplexArticleItem_item__L5o7k'):
             listing = {}
+            
+            # 매물 이름
             name_tag = item.find('span', class_='ComplexArticleItem_name__4h3AA')
             listing['매물명'] = name_tag.text.strip() if name_tag else 'Unknown'
+            
+            # 매매 가격
             price_tag = item.find('span', class_='ComplexArticleItem_price__DFeIb')
             listing['매매가'] = price_tag.text.strip() if price_tag else 'Unknown'
             
+            # 면적, 층수, 방향
             summary_items = item.find_all('li', class_='ComplexArticleItem_item-summary__oHSwl')
-            if len(summary_items) >= 4:
-                listing['면적'] = summary_items[1].text.strip() if len(summary_items) > 1 else 'Unknown'
-                listing['층수'] = summary_items[2].text.strip() if len(summary_items) > 2 else 'Unknown'
-                listing['방향'] = summary_items[3].text.strip() if len(summary_items) > 3 else 'Unknown'
-
+            listing['면적'] = summary_items[1].text.strip() if len(summary_items) > 1 else 'Unknown'
+            listing['층수'] = summary_items[2].text.strip() if len(summary_items) > 2 else 'Unknown'
+            listing['방향'] = summary_items[3].text.strip() if len(summary_items) > 3 else 'Unknown'
+            
+            # 이미지
+            image_tag = item.find('img')
+            listing['이미지'] = image_tag['src'] if image_tag else 'No image'
+            
+            # 코멘트
+            comment_tag = item.find('p', class_='ComplexArticleItem_comment__zN_dK')
+            listing['코멘트'] = comment_tag.text.strip() if comment_tag else 'No comment'
+            
+            # 매물 정보에 기본 상세 정보 추가
             combined_listing = {**detail_dict, **listing}
             listings.append(combined_listing)
         
@@ -132,24 +145,81 @@ def get_apt_details(apt_code):
         st.error(f"Error fetching details for {apt_code}: {e}")
         return []
 
-# Streamlit 앱 구현
-st.title("아파트 정보 조회")
-st.write("도시 및 법정동 선택 후, 해당 지역 아파트 정보를 조회하세요.")
+# 아파트 정보를 수집하는 함수
+def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path='district.json'):
+    sigungu_codes, dong_list = get_dong_codes_for_city(city_name, sigungu_name, json_path)
 
-# 파일 업로드 (JSON)
-json_file = st.file_uploader("법정동 코드가 포함된 JSON 파일 업로드", type=["json"])
+    if dong_list is None:
+        st.error(f"Error: {city_name} not found in JSON.")
+        return None
 
-if json_file is not None:
-    json_data = load_dong_codes(json_file)
-    
-    city_name = st.text_input("도시 이름 입력 (예: 서울특별시)")
-    sigungu_name = st.text_input("시군구 이름 입력 (예: 강남구)")
-    dong_name = st.text_input("법정동 이름 입력 (선택사항, 전체일 경우 빈칸)")
-    
-    if st.button("아파트 정보 조회"):
-        if city_name and sigungu_name:
-            apt_list = get_dong_codes_for_city(city_name, sigungu_name, json_data)
-            if apt_list:
-                st.write(apt_list)
+    all_apt_data = []
+    dong_code_name_map = {dong['code']: dong['name'] for dong in dong_list}
+
+    # 법정동 선택
+    if dong_name and dong_name != '전체':
+        dong_code_name_map = {k: v for k, v in dong_code_name_map.items() if v == dong_name}
+
+    for dong_code, dong_name in dong_code_name_map.items():
+        st.write(f"Collecting apartment codes for {dong_code} ({dong_name})")
+        apt_codes = get_apt_list(dong_code)
+
+        if not apt_codes.empty:
+            for _, apt_info in apt_codes.iterrows():
+                apt_code = apt_info['complexNo']
+                st.write(f"Collecting details for {apt_code}")
+                listings = get_apt_details(apt_code)
+                
+                if listings:
+                    for listing in listings:
+                        listing['dong_code'] = dong_code
+                        listing['dong_name'] = dong_name
+                        all_apt_data.append(listing)
         else:
-            st.error("도시와 시군구 이름을 입력하세요.")
+            st.warning(f"No apartment codes found for {dong_code}")
+
+    if all_apt_data:
+        final_df = pd.DataFrame(all_apt_data)
+        final_df['si_do_name'] = city_name
+        final_df['sigungu_name'] = sigungu_name
+        final_df['dong_name'] = dong_name if dong_name else '전체'
+        return final_df
+    else:
+        st.warning("No data found.")
+        return pd.DataFrame()
+
+# Streamlit 앱 시작
+st.title("아파트 정보 조회 시스템")
+
+city_name = st.text_input("도시 이름을 입력하세요", "서울특별시")
+sigungu_name = st.text_input("시군구 이름을 입력하세요", "강남구")
+dong_name = st.text_input("법정동 이름을 입력하세요 (전체를 원하면 비워두세요)", "개포동")
+
+if st.button("아파트 정보 수집"):
+    apt_data = collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+
+    if not apt_data.empty:
+        st.dataframe(apt_data)
+
+        # 엑셀 파일로 저장
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            apt_data.to_excel(writer, index=False)
+        excel_data = output.getvalue()
+
+        # 다운로드 버튼 추가
+        st.download_button(
+            label="엑셀 파일 다운로드",
+            data=excel_data,
+            file_name=f"{city_name}_{sigungu_name}_apartments.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # CSV 파일로 저장 및 다운로드 버튼
+        csv_data = apt_data.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="CSV 파일 다운로드",
+            data=csv_data,
+            file_name=f"{city_name}_{sigungu_name}_apartments.csv",
+            mime="text/csv"
+        )
