@@ -4,8 +4,6 @@ from io import BytesIO
 import requests
 import json
 from bs4 import BeautifulSoup
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 # JSON 파일에서 법정동 코드 가져오기
 def get_dong_codes_for_city(city_name, sigungu_name=None, json_path='district.json'):
@@ -134,100 +132,87 @@ def get_apt_details(apt_code):
         st.error(f"Error fetching details for {apt_code}: {e}")
         return []
 
-# 가격 문자열을 정수로 변환
-def parse_price(price_str):
-    if price_str:
-        price_str = price_str.replace('억', '00000000').replace('천', '0000').replace(',', '')
-        try:
-            return int(price_str)
-        except ValueError:
-            return None
-    return None
-
-# 가격 구간으로 나누기
-def categorize_price(price):
-    if price is None:
-        return 'Unknown'
-    elif price < 1e8:
-        return '<1억'
-    elif price < 3e8:
-        return '1억~3억'
-    elif price < 5e8:
-        return '3억~5억'
-    elif price < 7e8:
-        return '5억~7억'
-    else:
-        return '7억 이상'
-
 # 아파트 정보를 수집하는 함수
 def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path='district.json'):
     sigungu_codes, dong_list = get_dong_codes_for_city(city_name, sigungu_name, json_path)
 
     if dong_list is None:
-        st.error(f"Error: {city_name} or {sigungu_name} not found.")
-        return
-    
-    st.write(f"수집된 동: {dong_list}")
-    
-    all_data = []
-    for dong in dong_list:
-        st.write(f"Fetching data for {dong['name']}")
-        df = get_apt_list(dong['code'])
-        if not df.empty:
-            all_data.append(df)
-    
-    if not all_data:
-        st.warning("No data available.")
-        return pd.DataFrame()
-    
-    df_all = pd.concat(all_data, ignore_index=True)
-    df_all['price'] = df_all['price'].apply(parse_price)
-    df_all['price_category'] = df_all['price'].apply(categorize_price)
-    
-    return df_all
+        st.error(f"Error: {city_name} not found in JSON.")
+        return None
 
-# Streamlit UI
-st.title("아파트 정보 시각화 및 분석")
-
-city_name = st.selectbox("시/도 선택", ["서울", "부산", "대구", "인천", "광주", "대전", "울산", "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"])
-sigungu_name = st.selectbox("구/군/구 선택", ["전체"] + ["서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", "대전광역시", "울산광역시", "경기도", "강원도", "충청북도", "충청남도", "전라북도", "전라남도", "경상북도", "경상남도", "제주특별자치도"])
-dong_name = st.selectbox("동 선택 (옵션)", [None] + ["동1", "동2", "동3"])  # 이곳에 실제 동 데이터를 넣어야 함
-
-if st.button("데이터 수집 및 시각화"):
-    data = collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+    all_apt_data = []
+    dong_code_name_map = {dong['code']: dong['name'] for dong in dong_list}
     
-    if not data.empty:
-        st.write("아파트 데이터", data)
+    # 수집 중 표시를 위한 placeholder
+    placeholder = st.empty()
 
-        # 데이터 다운로드
-        towrite = BytesIO()
-        data.to_csv(towrite, encoding='utf-8', index=False)
-        towrite.seek(0)
-        st.download_button(label="CSV 파일 다운로드", data=towrite, file_name='apt_data.csv', mime='text/csv')
+    if dong_name and dong_name != '전체':
+        dong_code_name_map = {k: v for k, v in dong_code_name_map.items() if v == dong_name}
+
+    for dong_code, dong_name in dong_code_name_map.items():
+        placeholder.write(f"{dong_name} ({dong_code}) - 수집중입니다.")
+        apt_codes = get_apt_list(dong_code)
+
+        if not apt_codes.empty:
+            for _, apt_info in apt_codes.iterrows():
+                apt_code = apt_info['complexNo']
+                apt_name = apt_info['complexName']
+                placeholder.write(f"{apt_name} ({apt_code}) - 수집중입니다.")
+                listings = get_apt_details(apt_code)
+                
+                if listings:
+                    for listing in listings:
+                        listing['dong_code'] = dong_code
+                        listing['dong_name'] = dong_name
+                        all_apt_data.append(listing)
+        else:
+            st.warning(f"No apartment codes found for {dong_code}")
+
+    # 수집이 완료된 후, 수집 중 메시지를 지우기
+    placeholder.empty()
+
+    if all_apt_data:
+        final_df = pd.DataFrame(all_apt_data)
+        final_df['si_do_name'] = city_name
+        final_df['sigungu_name'] = sigungu_name
+        final_df['dong_name'] = dong_name if dong_name else '전체'
         
-        # 시각화
-        fig, axs = plt.subplots(2, 2, figsize=(14, 10))
-        
-        # 가격 분포 그래프
-        sns.histplot(data['price'].dropna(), bins=30, ax=axs[0, 0])
-        axs[0, 0].set_title('가격 분포')
-        
-        # 가격 구간별 아파트 수
-        sns.countplot(data=data, x='price_category', ax=axs[0, 1])
-        axs[0, 1].set_title('가격 구간별 아파트 수')
-        axs[0, 1].tick_params(axis='x', rotation=45)
-        
-        # 연도별 아파트 수
-        sns.countplot(data=data, x='buildYear', ax=axs[1, 0])
-        axs[1, 0].set_title('연도별 아파트 수')
-        axs[1, 0].tick_params(axis='x', rotation=45)
-        
-        # 면적 구간별 아파트 수
-        data['areaSize_category'] = pd.cut(data['areaSize'].astype(float), bins=[0, 40, 60, 80, 100, 120, 140, 160, 200, float('inf')], labels=['<40㎡', '40~60㎡', '60~80㎡', '80~100㎡', '100~120㎡', '120~140㎡', '140~160㎡', '160~200㎡', '200㎡ 이상'])
-        sns.countplot(data=data, x='areaSize_category', ax=axs[1, 1])
-        axs[1, 1].set_title('면적 구간별 아파트 수')
-        axs[1, 1].tick_params(axis='x', rotation=45)
-        
-        st.pyplot(fig)
+        # 데이터프레임 결과 출력
+        st.write("아파트 정보 수집 완료:")
+        st.dataframe(final_df)
+
+        # 엑셀 파일로 저장
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            final_df.to_excel(writer, index=False)
+        output.seek(0)
+
+        # 엑셀 파일 다운로드 버튼
+        st.download_button(
+            label="Download Excel",
+            data=output,
+            file_name=f"{city_name}_{sigungu_name}_apartments.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # CSV 파일 다운로드 버튼
+        csv = final_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download CSV",
+            data=csv,
+            file_name=f"{city_name}_{sigungu_name}_apartments.csv",
+            mime="text/csv"
+        )
     else:
-        st.warning("No data available.")
+        st.write("No data to save.")
+
+# Streamlit 앱 실행
+st.title("아파트 정보 수집기")
+
+# 사용자 입력 받기
+city_name = st.text_input("시/도 이름 입력", "서울특별시")
+sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
+dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
+
+if st.button("정보 수집 시작"):
+    collect_apt_info_for_city(city_name, sigungu_name, dong_name)
