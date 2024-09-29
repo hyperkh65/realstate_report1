@@ -143,21 +143,21 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
     dong_code_name_map = {dong['code']: dong['name'] for dong in dong_list}
 
     total_dongs = len(dong_code_name_map)
-    completed_dongs = 0
-
-    # 수집 중 표시를 위한 placeholder
-    placeholder = st.empty()
+    
+    # 수집 진행 상태 표시
+    progress_bar = st.progress(0)
 
     if dong_name and dong_name != '전체':
         dong_code_name_map = {k: v for k, v in dong_code_name_map.items() if v == dong_name}
 
-    for dong_code, dong_name in dong_code_name_map.items():
+    for idx, (dong_code, dong_name) in enumerate(dong_code_name_map.items()):
         apt_codes = get_apt_list(dong_code)
-        
+
         # 진행 상태 업데이트
+        progress_percentage = (idx + 1) / total_dongs
+        progress_bar.progress(progress_percentage)
+
         if not apt_codes.empty:
-            completed_dongs += 1
-            placeholder.write(f"{dong_name} ({dong_code}) - 수집 완료: {completed_dongs}/{total_dongs} 완료, {total_dongs - completed_dongs} 남음")
             for _, apt_info in apt_codes.iterrows():
                 apt_code = apt_info['complexNo']
                 listings = get_apt_details(apt_code)
@@ -167,13 +167,9 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
                         listing['dong_code'] = dong_code
                         listing['dong_name'] = dong_name
                         all_apt_data.append(listing)
-        else:
-            # 아파트 코드가 없는 경우는 표시하지 않음
-            completed_dongs += 1
-            placeholder.write(f"{dong_name} ({dong_code}) - 수집 완료: {completed_dongs}/{total_dongs} 완료, {total_dongs - completed_dongs} 남음")
 
     # 수집이 완료된 후, 수집 중 메시지를 지우기
-    placeholder.empty()
+    progress_bar.empty()
 
     if all_apt_data:
         final_df = pd.DataFrame(all_apt_data)
