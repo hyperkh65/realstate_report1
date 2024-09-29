@@ -176,42 +176,26 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         final_df['si_do_name'] = city_name
         final_df['sigungu_name'] = sigungu_name
         final_df['dong_name'] = dong_name if dong_name else '전체'
-        
-        # 결과를 이쁘게 표시하기 위한 설정
-        final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<img src="{x}" style="height:100px;">' if x != 'No image' else 'No image')
 
+        # 이미지 열을 하이퍼링크로 변경
+        final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<a href="{x}" target="_blank">이미지 보기</a>' if x != 'No image' else 'No image')
+        
+        # 데이터프레임 결과 출력
         st.write("아파트 정보 수집 완료:")
-        
-        # Streamlit의 데이터프레임으로 결과 표시
-        st.dataframe(final_df.drop(columns='이미지').style.format({'이미지': lambda x: f'<img src="{x}" style="height:100px;">' if x != 'No image' else 'No image'}, escape=False))
-        
-        # Excel 파일 다운로드 버튼
-        excel_file = BytesIO()
-        with pd.ExcelWriter(excel_file, engine='xlsxwriter') as writer:
-            final_df.to_excel(writer, index=False, sheet_name='Apt Info')
-            writer.save()
-        excel_file.seek(0)
-
-        st.download_button(
-            label="Download Excel",
-            data=excel_file,
-            file_name='apt_info.xlsx',
-            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
+        st.markdown(final_df.to_html(escape=False, index=False), unsafe_allow_html=True)
     else:
-        st.warning("No data collected.")
+        st.warning("아파트 정보가 없습니다.")
 
-# Streamlit UI 설정
+# 스트림릿 앱 구성
 st.title("아파트 정보 수집기")
-st.sidebar.header("입력")
 
-# 사용자 입력 받기
-city_name = st.sidebar.text_input("도시 이름을 입력하세요:")
-sigungu_name = st.sidebar.text_input("시군구 이름을 입력하세요:")
-dong_name = st.sidebar.text_input("동 이름을 입력하세요 (선택 사항):")
+# 사용자 입력
+city_name = st.text_input("도시 이름:")
+sigungu_name = st.text_input("시군구 이름:")
+dong_name = st.text_input("법정동 이름 (선택):")
 
-if st.sidebar.button("검색"):
+if st.button("수집 시작"):
     if city_name and sigungu_name:
         collect_apt_info_for_city(city_name, sigungu_name, dong_name)
     else:
-        st.error("도시와 시군구 이름을 입력하세요.")
+        st.warning("도시 이름과 시군구 이름을 입력해주세요.")
