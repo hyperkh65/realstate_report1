@@ -216,4 +216,3 @@ dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
 
 if st.button("정보 수집 시작"):
     collect_apt_info_for_city(city_name, sigungu_name, dong_name)
-지금 번역하기
