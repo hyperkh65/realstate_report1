@@ -182,16 +182,17 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         final_df['dong_name'] = dong_name if dong_name else '전체'
         
         # 데이터프레임 결과 출력
-        st.write("아파트 정보 수집 완료:")
+        st.subheader("수집된 아파트 정보")
         st.dataframe(final_df)
 
-        # 엑셀 파일 다운로드
+        # 엑셀로 다운로드 기능
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             final_df.to_excel(writer, index=False, sheet_name='Apartments')
-            writer.save()
         output.seek(0)
         st.download_button("엑셀로 다운로드", output, "apartments.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    else:
+        st.warning("아파트 정보를 찾지 못했습니다.")
 
 # 스트림릿 앱 레이아웃
 st.title("아파트 정보 수집기")
