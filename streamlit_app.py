@@ -178,41 +178,53 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         final_df['dong_name'] = dong_name if dong_name else '전체'
         
         # 데이터프레임 결과 출력
-        st.write("아파트 정보 수집 완료:")
-        st.dataframe(final_df)
-
-        # 엑셀 파일로 저장
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            final_df.to_excel(writer, index=False)
-        output.seek(0)
-
-        # 엑셀 파일 다운로드 버튼
-        st.download_button(
-            label="Download Excel",
-            data=output,
-            file_name=f"{city_name}_{sigungu_name}_apartments.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-        # CSV 파일 다운로드 버튼
-        csv = final_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name=f"{city_name}_{sigungu_name}_apartments.csv",
-            mime="text/csv"
-        )
+        return final_df
     else:
-        st.write("No data to save.")
+        return None
 
 # Streamlit 앱 실행
 st.title("아파트 정보 수집기")
 
-# 사용자 입력 받기
-city_name = st.text_input("시/도 이름 입력", "서울특별시")
-sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
-dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
+# Create a two-column layout
+col1, col2 = st.columns([1, 3])  # Adjust column widths as needed
 
-if st.button("정보 수집 시작"):
-    collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+# Left column for options and status
+with col1:
+    city_name = st.text_input("시/도 이름 입력", "서울특별시")
+    sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
+    dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
+
+    if st.button("정보 수집 시작"):
+        with st.spinner("정보 수집 중..."):
+            final_df = collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+            if final_df is not None:
+                # Display the results in the right column
+                with col2:
+                    st.write("아파트 정보 수집 완료:")
+                    st.dataframe(final_df)
+
+                    # 엑셀 파일로 저장
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                        final_df.to_excel(writer, index=False)
+                    output.seek(0)
+
+                    # 엑셀 파일 다운로드 버튼
+                    st.download_button(
+                        label="Download Excel",
+                        data=output,
+                        file_name=f"{city_name}_{sigungu_name}_apartments.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+
+                    # CSV 파일 다운로드 버튼
+                    csv = final_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="Download CSV",
+                        data=csv,
+                        file_name=f"{city_name}_{sigungu_name}_apartments.csv",
+                        mime="text/csv"
+                    )
+            else:
+                with col2:
+                    st.write("No data to save.")
