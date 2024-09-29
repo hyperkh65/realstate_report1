@@ -179,56 +179,38 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         
         # 데이터프레임 결과 출력
         st.write("아파트 정보 수집 완료:")
+        
+        # 결과를 이쁘게 표시하기 위한 설정
+        final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<img src="{x}" style="height:100px;">' if x != 'No image' else 'No image')
+        st.markdown(final_df.to_html(escape=False, index=False), unsafe_allow_html=True)
 
-        # 결과를 이미지와 함께 표시하기
-        for _, row in final_df.iterrows():
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                st.image(row['이미지'], use_column_width=True)
-            with col2:
-                st.write(f"**단지명:** {row['complexName']}")
-                st.write(f"**매물명:** {row['매물명']}")
-                st.write(f"**매매가:** {row['매매가']}")
-                st.write(f"**면적:** {row['면적']}")
-                st.write(f"**층수:** {row['층수']}")
-                st.write(f"**방향:** {row['방향']}")
-                st.write(f"**코멘트:** {row['코멘트']}")
-                st.write("---")
+        # 엑셀 파일 다운로드
+        excel_file = BytesIO()
+        with pd.ExcelWriter(excel_file, engine='xlsxwriter') as writer:
+            final_df.to_excel(writer, index=False, sheet_name='Apt Info')
+            writer.save()
+        excel_file.seek(0)
 
-        # 다운로드 버튼
-        download_button = st.button("엑셀 다운로드")
-        if download_button:
-            to_excel(final_df)
+        st.download_button(
+            label="Download Excel",
+            data=excel_file,
+            file_name='apt_info.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    else:
+        st.warning("No data collected.")
 
-# 엑셀 파일로 다운로드하는 함수
-def to_excel(df):
-    output = BytesIO()
-    writer = pd.ExcelWriter(output, engine='xlsxwriter')
-    df.to_excel(writer, index=False, sheet_name='Apartment Data')
-    writer.save()
-    output.seek(0)
+# Streamlit UI 설정
+st.title("아파트 정보 수집기")
+st.sidebar.header("입력")
 
-    st.download_button(
-        label="Download Excel",
-        data=output,
-        file_name='apartment_data.xlsx',
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+# 사용자 입력 받기
+city_name = st.sidebar.text_input("도시 이름을 입력하세요:")
+sigungu_name = st.sidebar.text_input("시군구 이름을 입력하세요:")
+dong_name = st.sidebar.text_input("동 이름을 입력하세요 (선택 사항):")
 
-# Streamlit 앱 실행
-def main():
-    st.title("아파트 정보 수집기")
-
-    # 사용자 입력 부분
-    city_name = st.text_input("시/도 이름을 입력하세요:")
-    sigungu_name = st.text_input("시군구 이름을 입력하세요:")
-    dong_name = st.text_input("동 이름을 입력하세요 (선택적):")
-
-    if st.button("정보 수집 시작"):
-        if not city_name or not sigungu_name:
-            st.error("시/도 이름과 시군구 이름을 입력해야 합니다.")
-        else:
-            collect_apt_info_for_city(city_name, sigungu_name, dong_name)
-
-if __name__ == "__main__":
-    main()
+if st.sidebar.button("검색"):
+    if city_name and sigungu_name:
+        collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+    else:
+        st.error("도시와 시군구 이름을 입력하세요.")
