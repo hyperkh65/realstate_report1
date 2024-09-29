@@ -8,10 +8,7 @@ import re
 
 # 매매가 정보를 숫자로 변환하는 함수
 def parse_price(price_str):
-    # "매매"라는 단어 제거
     price_str = price_str.replace("매매", "").strip()
-    
-    # 가격 정보에서 숫자만 추출
     matches = re.findall(r'\d+', price_str)
     if matches:
         billion = int(matches[0]) * 100000000  # 억 단위
@@ -99,7 +96,6 @@ def get_apt_details(apt_code):
     }
     
     try:
-        # 기본 정보 가져오기
         r_details = requests.get(details_url, headers=header)
         r_details.encoding = "utf-8-sig"
         soup_details = BeautifulSoup(r_details.content, 'html.parser')
@@ -115,7 +111,6 @@ def get_apt_details(apt_code):
             if term in ['공급면적', '전용면적', '해당면적 세대수', '현관구조', '방/욕실', '위치', '사용승인일', '세대수', '난방', '주차', '전기차 충전시설', '용적률/건폐율', '관리사무소 전화', '건설사']:
                 detail_dict[term] = definition
 
-        # 매물 정보 가져오기
         r_article = requests.get(article_url, headers=header)
         r_article.encoding = "utf-8-sig"
         soup_article = BeautifulSoup(r_article.content, 'html.parser')
@@ -127,8 +122,8 @@ def get_apt_details(apt_code):
             listing['매물명'] = name_tag.text.strip() if name_tag else 'Unknown'
             price_tag = item.find('span', class_='ComplexArticleItem_price__DFeIb')
             price_str = price_tag.text.strip() if price_tag else 'Unknown'
-            listing['매매가'] = price_str  # 원본 가격 문자열 저장
-            listing['매매가_숫자'] = parse_price(price_str)  # 정규화된 가격 저장
+            listing['매매가'] = price_str
+            listing['매매가_숫자'] = parse_price(price_str)
             
             summary_items = item.find_all('li', class_='ComplexArticleItem_item-summary__oHSwl')
             if len(summary_items) >= 4:
@@ -137,7 +132,7 @@ def get_apt_details(apt_code):
                 listing['방향'] = summary_items[3].text.strip() if len(summary_items) > 3 else 'Unknown'
             
             image_tag = item.find('img')
-            listing['이미지'] = image_tag['src'] if image_tag else 'No image'
+            listing['이미지'] = image_tag['src'] if image_tag else 'No image'  # 기본값 설정
             comment_tag = item.find('p', class_='ComplexArticleItem_comment__zN_dK')
             listing['코멘트'] = comment_tag.text.strip() if comment_tag else 'No comment'
             
@@ -171,20 +166,13 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         placeholder.write(f"{dong_name} ({dong_code}) - 수집중입니다.")
         apt_codes = get_apt_list(dong_code)
 
-        if not apt_codes.empty:
-            for _, apt_info in apt_codes.iterrows():
-                apt_code = apt_info['complexNo']
-                apt_name = apt_info['complexName']
-                placeholder.write(f"{apt_name} ({apt_code}) - 수집중입니다.")
-                listings = get_apt_details(apt_code)
-                
-                if listings:
-                    for listing in listings:
-                        listing['dong_code'] = dong_code
-                        listing['dong_name'] = dong_name
-                        all_apt_data.append(listing)
-        else:
-            st.warning(f"No apartments found for {dong_name} ({dong_code}).")
+        if apt_codes is not None:
+            for apt_code in apt_codes['complexNo']:
+                apt_details = get_apt_details(apt_code)
+                all_apt_data.extend(apt_details)
+    
+    if not all_apt_data:
+        st.warning(f"No apartments found for {dong_name} ({dong_code}).")
 
     placeholder.empty()  # 수집 완료 후 placeholder 제거
     return all_apt_data
@@ -192,19 +180,19 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
 # Streamlit 앱 시작
 def main():
     st.title("아파트 정보 수집기")
-    
+
     # 사용자 입력
     city_name = st.text_input("도시명 입력")
     sigungu_name = st.text_input("시군구명 입력")
     dong_name = st.text_input("동명 입력 (선택사항)")
-    
+
     if st.button("검색"):
         all_apt_data = collect_apt_info_for_city(city_name, sigungu_name, dong_name)
 
         if all_apt_data:
             df = pd.DataFrame(all_apt_data)
             df.drop(columns=['이미지'], inplace=True)  # 이미지 컬럼은 링크로만 표시할 것이므로 제거
-            
+
             # 이미지 링크 추가
             df['이미지 링크'] = df['이미지'].apply(lambda x: f'<a href="{x}" target="_blank">이미지 보기</a>')
 
