@@ -181,14 +181,20 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         st.write("아파트 정보 수집 완료:")
         st.dataframe(final_df)
 
-        # 엑셀 파일로 저장
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            final_df.to_excel(writer, index=False)
-        output.seek(0)
+        # Excel로 다운로드할 수 있도록 설정
+        to_excel(final_df)
 
-        # 엑셀 파일 다운로드
-        st.download_button(label="엑셀로 다운로드", data=output, file_name="아파트정보.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    else:
+        st.warning("수집된 아파트 정보가 없습니다.")
+
+# Excel 파일로 다운로드
+def to_excel(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Apartment Info')
+        writer.save()
+    output.seek(0)
+    st.download_button(label="Download Excel", data=output, file_name="아파트정보.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # Streamlit 앱 시작
 st.title("아파트 정보 수집기")
@@ -200,13 +206,19 @@ si_do_options = ['서울특별시', '부산광역시', '대구광역시', '인�
 city_name = st.sidebar.selectbox("시도 선택", si_do_options)
 
 # 시군구 자동 업데이트
-sigungu_name = st.sidebar.selectbox("시군구 선택", options=['전체'] + [sigungu['sigungu_name'] for sigungu in get_dong_codes_for_city(city_name)[1]])
+sigungu_options = ['전체'] + [sigungu['sigungu_name'] for sigungu in get_dong_codes_for_city(city_name)[1] if sigungu is not None]
 
-# 동 자동 업데이트
-if sigungu_name != '전체':
-    dong_name_list = [dong['name'] for dong in get_dong_codes_for_city(city_name, sigungu_name)[1]]
-    dong_name = st.sidebar.selectbox("동 선택", options=['전체'] + dong_name_list)
+if sigungu_options:
+    sigungu_name = st.sidebar.selectbox("시군구 선택", options=sigungu_options)
+
+    # 동 자동 업데이트
+    if sigungu_name != '전체':
+        dong_name_list = [dong['name'] for dong in get_dong_codes_for_city(city_name, sigungu_name)[1]]
+        dong_name = st.sidebar.selectbox("동 선택", options=['전체'] + dong_name_list)
+    else:
+        dong_name = '전체'
 else:
+    sigungu_name = '전체'
     dong_name = '전체'
 
 # 검색 버튼
