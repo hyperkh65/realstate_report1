@@ -180,9 +180,8 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         # 데이터프레임 결과 출력
         st.write("아파트 정보 수집 완료:")
         
-        # 이미지를 HTML로 표시하기 위한 변환
-        final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<img src="{x}" width="100" height="100" style="object-fit:cover;" />')
-        st.markdown(final_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+        # 결과를 스크롤 가능한 데이터프레임으로 표시
+        st.dataframe(final_df[['complexName', '매물명', '매매가', '면적', '층수', '방향', '이미지', '코멘트']], height=600)
 
         # 엑셀 파일로 저장
         output = BytesIO()
@@ -213,9 +212,21 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
 st.title("아파트 정보 수집기")
 
 # 사용자 입력 받기
-city_name = st.text_input("시/도 이름 입력", "서울특별시")
-sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
-dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
+col1, col2 = st.columns([1, 3])  # 좌측, 우측 레이아웃
 
-if st.button("정보 수집 시작"):
-    collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+with col1:
+    city_name = st.text_input("시/도 이름 입력", "서울특별시")
+    sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
+    dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
+    if st.button("정보 수집 시작"):
+        collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+
+with col2:
+    st.markdown("""
+        <style>
+            .css-1y3q7uo { background-color: #f0f2f5; }
+            .css-1y3q7uo h1 { color: #1a1a1a; }
+            .css-1y3q7uo .stButton { background-color: #4CAF50; color: white; }
+        </style>
+    """, unsafe_allow_html=True)
+    st.write("아파트 정보는 검색 후 오른쪽 테이블에서 확인할 수 있습니다.")
