@@ -179,10 +179,7 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         
         # 데이터프레임 결과 출력
         st.write("아파트 정보 수집 완료:")
-        # 이미지와 함께 결과 테이블 표시
-        image_cols = ['이미지', '매물명', '매매가', '면적', '층수', '방향', '코멘트']
-        final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<img src="{x}" width="100" />' if x != 'No image' else '')
-        st.markdown(final_df.to_html(escape=False, index=False, columns=image_cols), unsafe_allow_html=True)
+        st.dataframe(final_df)
 
         # 엑셀 파일로 저장
         output = BytesIO()
@@ -190,25 +187,28 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
             final_df.to_excel(writer, index=False)
         output.seek(0)
 
-        # 엑셀 파일 다운로드 버튼
-        st.download_button(
-            label="Download Excel",
-            data=output,
-            file_name="apartment_data.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.warning("No apartment data collected.")
+        # 엑셀 파일 다운로드
+        st.download_button(label="엑셀로 다운로드", data=output, file_name="아파트정보.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# Streamlit UI 구성
-st.set_page_config(page_title="아파트 정보 수집기", layout="wide")
-st.sidebar.header("옵션")
+# Streamlit 앱 시작
+st.title("아파트 정보 수집기")
 
-# 사용자 입력 받기
-city_name = st.sidebar.selectbox("시도 선택", ["서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", "대전광역시", "울산광역시", "세종특별자치시", "경기도", "강원도", "충청북도", "충청남도", "전라북도", "전라남도", "경상북도", "경상남도", "제주특별자치도"])
-sigungu_name = st.sidebar.selectbox("시군구 선택", ["전체", "강남구", "서초구", "송파구"])  # 예시로 몇 개만 추가
-dong_name = st.sidebar.selectbox("법정동 선택", ["전체", "역삼동", "잠실동"])  # 예시로 몇 개만 추가
+# Sidebar: 시도, 시군구, 동 선택
+st.sidebar.header("검색 옵션")
+si_do_options = ['서울특별시', '부산광역시', '대구광역시', '인천광역시', '광주광역시', '대전광역시', '울산광역시', '세종특별자치시', '경기도', '강원도', '충청북도', '충청남도', '전라북도', '전라남도', '경상북도', '경상남도', '제주특별자치도']
 
+city_name = st.sidebar.selectbox("시도 선택", si_do_options)
+
+# 시군구 자동 업데이트
+sigungu_name = st.sidebar.selectbox("시군구 선택", options=['전체'] + [sigungu['sigungu_name'] for sigungu in get_dong_codes_for_city(city_name)[1]])
+
+# 동 자동 업데이트
+if sigungu_name != '전체':
+    dong_name_list = [dong['name'] for dong in get_dong_codes_for_city(city_name, sigungu_name)[1]]
+    dong_name = st.sidebar.selectbox("동 선택", options=['전체'] + dong_name_list)
+else:
+    dong_name = '전체'
+
+# 검색 버튼
 if st.sidebar.button("검색하기"):
     collect_apt_info_for_city(city_name, sigungu_name, dong_name)
-
