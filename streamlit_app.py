@@ -177,14 +177,15 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         final_df['sigungu_name'] = sigungu_name
         final_df['dong_name'] = dong_name if dong_name else '전체'
         
-        # 데이터프레임 결과 출력
-        st.write("아파트 정보 수집 완료:")
-        
         # 결과를 이쁘게 표시하기 위한 설정
         final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<img src="{x}" style="height:100px;">' if x != 'No image' else 'No image')
-        st.markdown(final_df.to_html(escape=False, index=False), unsafe_allow_html=True)
 
-        # 엑셀 파일 다운로드
+        st.write("아파트 정보 수집 완료:")
+        
+        # Streamlit의 데이터프레임으로 결과 표시
+        st.dataframe(final_df.drop(columns='이미지').style.format({'이미지': lambda x: f'<img src="{x}" style="height:100px;">' if x != 'No image' else 'No image'}, escape=False))
+        
+        # Excel 파일 다운로드 버튼
         excel_file = BytesIO()
         with pd.ExcelWriter(excel_file, engine='xlsxwriter') as writer:
             final_df.to_excel(writer, index=False, sheet_name='Apt Info')
