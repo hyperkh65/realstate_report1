@@ -177,29 +177,12 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         final_df['sigungu_name'] = sigungu_name
         final_df['dong_name'] = dong_name if dong_name else '전체'
         
-        # 결과를 좌우측으로 표시
-        st.title("아파트 정보 결과")
-        cols = st.columns(2)
+        # 데이터프레임 결과 출력
+        st.write("아파트 정보 수집 완료:")
         
-        with cols[0]:
-            st.header("상세 정보")
-            for idx, row in final_df.iterrows():
-                st.subheader(row['complexName'])
-                
-                # 이미지 표시
-                if row['이미지'] != 'No image':
-                    st.image(row['이미지'], caption=row['매물명'], use_column_width=True)
-
-                st.write(f"**매매가:** {row['매매가']}")
-                st.write(f"**면적:** {row['면적']}")
-                st.write(f"**층수:** {row['층수']}")
-                st.write(f"**방향:** {row['방향']}")
-                st.write(f"**코멘트:** {row['코멘트']}")
-                st.write("---")
-
-        with cols[1]:
-            st.header("전체 데이터")
-            st.dataframe(final_df)
+        # 이미지를 HTML로 표시하기 위한 변환
+        final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<img src="{x}" width="100" height="100" style="object-fit:cover;" />')
+        st.markdown(final_df.to_html(escape=False, index=False), unsafe_allow_html=True)
 
         # 엑셀 파일로 저장
         output = BytesIO()
@@ -230,10 +213,9 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
 st.title("아파트 정보 수집기")
 
 # 사용자 입력 받기
-with st.sidebar:
-    city_name = st.text_input("시/도 이름 입력", "서울특별시")
-    sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
-    dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
+city_name = st.text_input("시/도 이름 입력", "서울특별시")
+sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
+dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
 
 if st.button("정보 수집 시작"):
     collect_apt_info_for_city(city_name, sigungu_name, dong_name)
