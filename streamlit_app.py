@@ -60,7 +60,6 @@ def get_apt_list(dong_code):
 
             return df[required_columns]
         else:
-            st.warning(f"No data found for {dong_code}.")
             return pd.DataFrame(columns=required_columns)
 
     except Exception as e:
@@ -142,22 +141,39 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
 
     all_apt_data = []
     dong_code_name_map = {dong['code']: dong['name'] for dong in dong_list}
-    
+
+    total_dongs = len(dong_code_name_map)
+    completed_dongs = 0
+
+    # 수집 중 표시를 위한 placeholder
+    placeholder = st.empty()
+
+    if dong_name and dong_name != '전체':
+        dong_code_name_map = {k: v for k, v in dong_code_name_map.items() if v == dong_name}
+
     for dong_code, dong_name in dong_code_name_map.items():
         apt_codes = get_apt_list(dong_code)
-
+        
+        # 진행 상태 업데이트
         if not apt_codes.empty:
+            completed_dongs += 1
+            placeholder.write(f"{dong_name} ({dong_code}) - 수집 완료: {completed_dongs}/{total_dongs} 완료, {total_dongs - completed_dongs} 남음")
             for _, apt_info in apt_codes.iterrows():
                 apt_code = apt_info['complexNo']
                 listings = get_apt_details(apt_code)
-                
+
                 if listings:
                     for listing in listings:
                         listing['dong_code'] = dong_code
                         listing['dong_name'] = dong_name
                         all_apt_data.append(listing)
         else:
-            st.warning(f"No apartment codes found for {dong_code}")
+            # 아파트 코드가 없는 경우는 표시하지 않음
+            completed_dongs += 1
+            placeholder.write(f"{dong_name} ({dong_code}) - 수집 완료: {completed_dongs}/{total_dongs} 완료, {total_dongs - completed_dongs} 남음")
+
+    # 수집이 완료된 후, 수집 중 메시지를 지우기
+    placeholder.empty()
 
     if all_apt_data:
         final_df = pd.DataFrame(all_apt_data)
@@ -165,52 +181,31 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         final_df['sigungu_name'] = sigungu_name
         final_df['dong_name'] = dong_name if dong_name else '전체'
         
-        # 이미지 하이퍼링크 만들기
-        final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<a href="{x}" target="_blank">이미지 보기</a>' if x != 'No image' else 'No image')
-        
         # 데이터프레임 결과 출력
         st.write("아파트 정보 수집 완료:")
-        st.markdown(final_df.to_html(escape=False), unsafe_allow_html=True)
+        st.dataframe(final_df)
 
-        # 엑셀 파일로 저장
+        # 엑셀 파일 다운로드
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            final_df.to_excel(writer, index=False)
+            final_df.to_excel(writer, index=False, sheet_name='Apartments')
+            writer.save()
         output.seek(0)
+        st.download_button("엑셀로 다운로드", output, "apartments.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-        # 엑셀 파일 다운로드 버튼
-        st.download_button(
-            label="Download Excel",
-            data=output,
-            file_name=f"{city_name}_{sigungu_name}_apartments.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-        # CSV 파일 다운로드 버튼
-        csv = final_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name=f"{city_name}_{sigungu_name}_apartments.csv",
-            mime='text/csv'
-        )
-    else:
-        st.warning("No apartment data collected.")
-
-# Streamlit 앱 실행
+# 스트림릿 앱 레이아웃
 st.title("아파트 정보 수집기")
 
-# 좌측에 사용자 입력 및 버튼 배치
+# 사이드바에 사용자 입력 창 생성
 with st.sidebar:
-    city_name = st.text_input("시/도 이름 입력", "서울특별시")
-    sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
-    dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
-    if st.button("정보 수집 시작"):
-        # 진행 상태 표시를 위한 placeholder
-        placeholder = st.empty()
-        placeholder.write("정보 수집 중...")
-        collect_apt_info_for_city(city_name, sigungu_name, dong_name)
-        placeholder.empty()  # 정보 수집이 끝난 후 placeholder 비우기
+    city_name = st.text_input("시/도 이름을 입력하세요:")
+    sigungu_name = st.text_input("시군구 이름을 입력하세요:")
+    dong_name = st.text_input("법정동 이름을 입력하세요 (선택):")
+    run_button = st.button("조회하기")
 
-# 오른쪽에는 결과 출력
-st.write("수집된 아파트 정보는 여기에 표시됩니다.")
+# 실행 버튼 클릭 시 아파트 정보 수집
+if run_button:
+    if city_name and sigungu_name:
+        collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+    else:
+        st.warning("시/도 이름과 시군구 이름을 모두 입력해야 합니다.")
