@@ -191,13 +191,13 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         st.warning("아파트 정보를 찾지 못했습니다.")
 
 # 스트림릿 앱 레이아웃
-st.title("아파트 정보 수집기")
+st.title("아파트 매물정보")
 
 # 사이드바에 사용자 입력 창 생성
 with st.sidebar:
     city_name = st.text_input("시/도 이름을 입력하세요:")
     sigungu_name = st.text_input("시군구 이름을 입력하세요:")
-    dong_name = st.text_input("법정동 이름을 입력하세요 (선택):")
+    dong_name = st.text_input("법정동 이름을 입력하세요 (선택사항):")
     run_button = st.button("조회하기")
 
 # 실행 버튼 클릭 시 아파트 정보 수집
