@@ -180,53 +180,34 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         # 데이터프레임 결과 출력
         st.write("아파트 정보 수집 완료:")
         
-        # 결과를 스크롤 가능한 데이터프레임으로 표시
-        st.dataframe(final_df[['complexName', '매물명', '매매가', '면적', '층수', '방향', '이미지', '코멘트']], height=600)
-
-        # 엑셀 파일로 저장
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            final_df.to_excel(writer, index=False)
-        output.seek(0)
+        # 결과를 스크롤 가능한 표로 보여줍니다.
+        st.dataframe(final_df.style.format({
+            '이미지': lambda x: f'<img src="{x}" style="height: 100px; width: auto;">' if x != 'No image' else 'No image'
+        }).hide_index())
 
         # 엑셀 파일 다운로드 버튼
-        st.download_button(
-            label="Download Excel",
-            data=output,
-            file_name=f"{city_name}_{sigungu_name}_apartments.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        excel_buffer = BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+            final_df.to_excel(writer, index=False, sheet_name='Apartments')
 
-        # CSV 파일 다운로드 버튼
-        csv = final_df.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name=f"{city_name}_{sigungu_name}_apartments.csv",
-            mime="text/csv"
+            label="Download Excel file",
+            data=excel_buffer.getvalue(),
+            file_name='apartments.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
     else:
-        st.write("No data to save.")
+        st.warning("No apartment data collected.")
 
-# Streamlit 앱 실행
-st.title("아파트 정보 수집기")
+# Streamlit 애플리케이션 설정
+st.set_page_config(page_title="아파트 정보 수집기", layout="wide")
 
-# 사용자 입력 받기
-col1, col2 = st.columns([1, 3])  # 좌측, 우측 레이아웃
+# 사이드바 설정
+st.sidebar.title("옵션")
+city_name = st.sidebar.selectbox("도시 선택", ["서울", "부산", "대구", "인천"])
+sigungu_name = st.sidebar.selectbox("시군구 선택", ["전체", "강남구", "서초구", "송파구"])  # 필요에 따라 시군구 옵션 추가
+dong_name = st.sidebar.selectbox("법정동 선택", ["전체"])  # 법정동 옵션은 API 호출 후 업데이트 가능
 
-with col1:
-    city_name = st.text_input("시/도 이름 입력", "서울특별시")
-    sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
-    dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
-    if st.button("정보 수집 시작"):
-        collect_apt_info_for_city(city_name, sigungu_name, dong_name)
-
-with col2:
-    st.markdown("""
-        <style>
-            .css-1y3q7uo { background-color: #f0f2f5; }
-            .css-1y3q7uo h1 { color: #1a1a1a; }
-            .css-1y3q7uo .stButton { background-color: #4CAF50; color: white; }
-        </style>
-    """, unsafe_allow_html=True)
-    st.write("아파트 정보는 검색 후 오른쪽 테이블에서 확인할 수 있습니다.")
+# 검색 버튼
+if st.sidebar.button("검색하기"):
+    collect_apt_info_for_city(city_name, sigungu_name, dong_name)
