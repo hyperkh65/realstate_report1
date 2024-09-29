@@ -143,21 +143,12 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
     all_apt_data = []
     dong_code_name_map = {dong['code']: dong['name'] for dong in dong_list}
     
-    # 수집 중 표시를 위한 placeholder
-    placeholder = st.empty()
-
-    if dong_name and dong_name != '전체':
-        dong_code_name_map = {k: v for k, v in dong_code_name_map.items() if v == dong_name}
-
     for dong_code, dong_name in dong_code_name_map.items():
-        placeholder.write(f"{dong_name} ({dong_code}) - 수집중입니다.")
         apt_codes = get_apt_list(dong_code)
 
         if not apt_codes.empty:
             for _, apt_info in apt_codes.iterrows():
                 apt_code = apt_info['complexNo']
-                apt_name = apt_info['complexName']
-                placeholder.write(f"{apt_name} ({apt_code}) - 수집중입니다.")
                 listings = get_apt_details(apt_code)
                 
                 if listings:
@@ -168,18 +159,18 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         else:
             st.warning(f"No apartment codes found for {dong_code}")
 
-    # 수집이 완료된 후, 수집 중 메시지를 지우기
-    placeholder.empty()
-
     if all_apt_data:
         final_df = pd.DataFrame(all_apt_data)
         final_df['si_do_name'] = city_name
         final_df['sigungu_name'] = sigungu_name
         final_df['dong_name'] = dong_name if dong_name else '전체'
         
+        # 이미지 하이퍼링크 만들기
+        final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<a href="{x}" target="_blank">이미지 보기</a>' if x != 'No image' else 'No image')
+        
         # 데이터프레임 결과 출력
         st.write("아파트 정보 수집 완료:")
-        st.dataframe(final_df)
+        st.markdown(final_df.to_html(escape=False), unsafe_allow_html=True)
 
         # 엑셀 파일로 저장
         output = BytesIO()
@@ -201,18 +192,25 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
             label="Download CSV",
             data=csv,
             file_name=f"{city_name}_{sigungu_name}_apartments.csv",
-            mime="text/csv"
+            mime='text/csv'
         )
     else:
-        st.write("No data to save.")
+        st.warning("No apartment data collected.")
 
 # Streamlit 앱 실행
 st.title("아파트 정보 수집기")
 
-# 사용자 입력 받기
-city_name = st.text_input("시/도 이름 입력", "서울특별시")
-sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
-dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
+# 좌측에 사용자 입력 및 버튼 배치
+with st.sidebar:
+    city_name = st.text_input("시/도 이름 입력", "서울특별시")
+    sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
+    dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
+    if st.button("정보 수집 시작"):
+        # 진행 상태 표시를 위한 placeholder
+        placeholder = st.empty()
+        placeholder.write("정보 수집 중...")
+        collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+        placeholder.empty()  # 정보 수집이 끝난 후 placeholder 비우기
 
-if st.button("정보 수집 시작"):
-    collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+# 오른쪽에는 결과 출력
+st.write("수집된 아파트 정보는 여기에 표시됩니다.")
