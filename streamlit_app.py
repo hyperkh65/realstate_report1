@@ -176,26 +176,44 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         final_df['si_do_name'] = city_name
         final_df['sigungu_name'] = sigungu_name
         final_df['dong_name'] = dong_name if dong_name else '전체'
-
-        # 이미지 열을 하이퍼링크로 변경
-        final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<a href="{x}" target="_blank">이미지 보기</a>' if x != 'No image' else 'No image')
         
         # 데이터프레임 결과 출력
         st.write("아파트 정보 수집 완료:")
-        st.markdown(final_df.to_html(escape=False, index=False), unsafe_allow_html=True)
-    else:
-        st.warning("아파트 정보가 없습니다.")
+        st.dataframe(final_df)
 
-# 스트림릿 앱 구성
+        # 엑셀 파일로 저장
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            final_df.to_excel(writer, index=False)
+        output.seek(0)
+
+        # 엑셀 파일 다운로드 버튼
+        st.download_button(
+            label="Download Excel",
+            data=output,
+            file_name=f"{city_name}_{sigungu_name}_apartments.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # CSV 파일 다운로드 버튼
+        csv = final_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download CSV",
+            data=csv,
+            file_name=f"{city_name}_{sigungu_name}_apartments.csv",
+            mime="text/csv"
+        )
+    else:
+        st.write("No data to save.")
+
+# Streamlit 앱 실행
 st.title("아파트 정보 수집기")
 
-# 사용자 입력
-city_name = st.text_input("도시 이름:")
-sigungu_name = st.text_input("시군구 이름:")
-dong_name = st.text_input("법정동 이름 (선택):")
+# 사용자 입력 받기
+city_name = st.text_input("시/도 이름 입력", "서울특별시")
+sigungu_name = st.text_input("구/군/구 이름 입력", "마포구")
+dong_name = st.text_input("동 이름 입력 (선택사항)", "아현동")
 
-if st.button("수집 시작"):
-    if city_name and sigungu_name:
-        collect_apt_info_for_city(city_name, sigungu_name, dong_name)
-    else:
-        st.warning("도시 이름과 시군구 이름을 입력해주세요.")
+if st.button("정보 수집 시작"):
+    collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+지금 번역하기
