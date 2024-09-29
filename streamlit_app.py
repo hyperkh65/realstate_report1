@@ -4,6 +4,22 @@ from io import BytesIO
 import requests
 import json
 from bs4 import BeautifulSoup
+import re
+
+# 매매가 정보를 숫자로 변환하는 함수
+def parse_price(price_str):
+    # "매매"라는 단어 제거
+    price_str = price_str.replace("매매", "").strip()
+    
+    # 가격 정보에서 숫자만 추출
+    matches = re.findall(r'\d+', price_str)
+    if matches:
+        billion = int(matches[0]) * 100000000  # 억 단위
+        if len(matches) > 1:
+            million = int(matches[1]) * 10000  # 만 단위
+            return (billion + million) // 2  # 평균값 반환
+        return billion  # 단일 가격 반환
+    return None  # 가격 정보가 없을 경우
 
 # JSON 파일에서 법정동 코드 가져오기
 def get_dong_codes_for_city(city_name, sigungu_name=None, json_path='district.json'):
@@ -110,7 +126,9 @@ def get_apt_details(apt_code):
             name_tag = item.find('span', class_='ComplexArticleItem_name__4h3AA')
             listing['매물명'] = name_tag.text.strip() if name_tag else 'Unknown'
             price_tag = item.find('span', class_='ComplexArticleItem_price__DFeIb')
-            listing['매매가'] = price_tag.text.strip() if price_tag else 'Unknown'
+            price_str = price_tag.text.strip() if price_tag else 'Unknown'
+            listing['매매가'] = price_str  # 원본 가격 문자열 저장
+            listing['매매가_숫자'] = parse_price(price_str)  # 정규화된 가격 저장
             
             summary_items = item.find_all('li', class_='ComplexArticleItem_item-summary__oHSwl')
             if len(summary_items) >= 4:
@@ -166,62 +184,33 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
                         listing['dong_name'] = dong_name
                         all_apt_data.append(listing)
         else:
-            st.warning(f"No apartment codes found for {dong_code}")
+            st.warning(f"No apartments found for {dong_name} ({dong_code}).")
 
-    # 수집이 완료된 후, 수집 중 메시지를 지우기
-    placeholder.empty()
+    placeholder.empty()  # 수집 완료 후 placeholder 제거
+    return all_apt_data
 
-    if all_apt_data:
-        final_df = pd.DataFrame(all_apt_data)
-        final_df['si_do_name'] = city_name
-        final_df['sigungu_name'] = sigungu_name
-        final_df['dong_name'] = dong_name if dong_name else '전체'
-        
-        # 데이터프레임 결과 출력
-        return final_df
-    else:
-        return None
+# Streamlit 앱 시작
+def main():
+    st.title("아파트 정보 수집기")
+    
+    # 사용자 입력
+    city_name = st.text_input("도시명 입력")
+    sigungu_name = st.text_input("시군구명 입력")
+    dong_name = st.text_input("동명 입력 (선택사항)")
+    
+    if st.button("검색"):
+        all_apt_data = collect_apt_info_for_city(city_name, sigungu_name, dong_name)
 
-# Streamlit 앱 실행
-st.title("아파트 정보 수집기")
+        if all_apt_data:
+            df = pd.DataFrame(all_apt_data)
+            df.drop(columns=['이미지'], inplace=True)  # 이미지 컬럼은 링크로만 표시할 것이므로 제거
+            
+            # 이미지 링크 추가
+            df['이미지 링크'] = df['이미지'].apply(lambda x: f'<a href="{x}" target="_blank">이미지 보기</a>')
 
-# Sidebar for options
-st.sidebar.header("옵션")
-city_name = st.sidebar.text_input("시/도 이름 입력", "서울특별시")
-sigungu_name = st.sidebar.text_input("구/군/구 이름 입력", "마포구")
-dong_name = st.sidebar.text_input("동 이름 입력 (선택사항)", "아현동")
+            # 결과 표시
+            st.write("### 검색 결과")
+            st.dataframe(df.to_html(escape=False, index=False), unsafe_allow_html=True)
 
-# Search button
-if st.sidebar.button("정보 수집 시작"):
-    with st.spinner("정보 수집 중..."):
-        final_df = collect_apt_info_for_city(city_name, sigungu_name, dong_name)
-        
-        # Display the results in the main area
-        if final_df is not None:
-            st.write("아파트 정보 수집 완료:")
-            st.dataframe(final_df)
-
-            # Save to Excel
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                final_df.to_excel(writer, index=False)
-            output.seek(0)
-
-            # Excel download button
-            st.download_button(
-                label="Download Excel",
-                data=output,
-                file_name=f"{city_name}_{sigungu_name}_apartments.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-            # CSV download button
-            csv = final_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download CSV",
-                data=csv,
-                file_name=f"{city_name}_{sigungu_name}_apartments.csv",
-                mime="text/csv"
-            )
-        else:
-            st.write("No data to save.")
+if __name__ == "__main__":
+    main()
