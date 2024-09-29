@@ -179,35 +179,36 @@ def collect_apt_info_for_city(city_name, sigungu_name, dong_name=None, json_path
         
         # 데이터프레임 결과 출력
         st.write("아파트 정보 수집 완료:")
-        
-        # 결과를 스크롤 가능한 표로 보여줍니다.
-        st.dataframe(final_df.style.format({
-            '이미지': lambda x: f'<img src="{x}" style="height: 100px; width: auto;">' if x != 'No image' else 'No image'
-        }).hide_index())
+        # 이미지와 함께 결과 테이블 표시
+        image_cols = ['이미지', '매물명', '매매가', '면적', '층수', '방향', '코멘트']
+        final_df['이미지'] = final_df['이미지'].apply(lambda x: f'<img src="{x}" width="100" />' if x != 'No image' else '')
+        st.markdown(final_df.to_html(escape=False, index=False, columns=image_cols), unsafe_allow_html=True)
+
+        # 엑셀 파일로 저장
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            final_df.to_excel(writer, index=False)
+        output.seek(0)
 
         # 엑셀 파일 다운로드 버튼
-        excel_buffer = BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-            final_df.to_excel(writer, index=False, sheet_name='Apartments')
-
         st.download_button(
-            label="Download Excel file",
-            data=excel_buffer.getvalue(),
-            file_name='apartments.xlsx',
-            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            label="Download Excel",
+            data=output,
+            file_name="apartment_data.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
         st.warning("No apartment data collected.")
 
-# Streamlit 애플리케이션 설정
+# Streamlit UI 구성
 st.set_page_config(page_title="아파트 정보 수집기", layout="wide")
+st.sidebar.header("옵션")
 
-# 사이드바 설정
-st.sidebar.title("옵션")
-city_name = st.sidebar.selectbox("도시 선택", ["서울", "부산", "대구", "인천"])
-sigungu_name = st.sidebar.selectbox("시군구 선택", ["전체", "강남구", "서초구", "송파구"])  # 필요에 따라 시군구 옵션 추가
-dong_name = st.sidebar.selectbox("법정동 선택", ["전체"])  # 법정동 옵션은 API 호출 후 업데이트 가능
+# 사용자 입력 받기
+city_name = st.sidebar.selectbox("시도 선택", ["서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", "대전광역시", "울산광역시", "세종특별자치시", "경기도", "강원도", "충청북도", "충청남도", "전라북도", "전라남도", "경상북도", "경상남도", "제주특별자치도"])
+sigungu_name = st.sidebar.selectbox("시군구 선택", ["전체", "강남구", "서초구", "송파구"])  # 예시로 몇 개만 추가
+dong_name = st.sidebar.selectbox("법정동 선택", ["전체", "역삼동", "잠실동"])  # 예시로 몇 개만 추가
 
-# 검색 버튼
 if st.sidebar.button("검색하기"):
     collect_apt_info_for_city(city_name, sigungu_name, dong_name)
+
